@@ -1,2 +1,1 @@
-This is an awesome new scientific project that uses `DrWatson`!
-
+In this project I attempt to implement to model described in (Seybold H, Andrade JS Jr, Herrmann HJ. Modeling river delta formation. Proc Natl Acad Sci U S A. 2007;104(43):16804‐16809. doi:10.1073/pnas.0705265104) using the Agents.jl framework. The model will be slightly tweaked to accommodate the agent based nature, and will take some ideas from (https://github.com/csdms-contrib/DeltaRCM)

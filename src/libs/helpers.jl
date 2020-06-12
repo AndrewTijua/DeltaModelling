@@ -1,32 +1,51 @@
-# using StaticArrays
-# using LinearAlgebra
-#
-# mutable struct cell
-#     #=
-#     id: cell id in abm
-#     pos: position of cell in grid as integer tuple, also used for flow direction calculations
-#     H: sum of depth of water and bed
-#         H_old: H at prev timestep
-#         H_smooth: H after diffusion applied
-#         H_new: weighted sum of H_old and H_smooth
-#     η: depth of bed
-#     q_w: water unit discharge vector
-#     sediments: volume of carried sediments:
-#         index 1: sand (coarse, noncohesive)
-#         index 2: mud (fine, cohesive)
-#     visited: boolean tuple indicating visitation by
-#         index 1: water parcel
-#         index 2: sediment, sand parcel
-#         index 3: sediment, mud parcel
-#     =#
+using StaticArrays
+using LinearAlgebra
+using Agents
+
+mutable struct cell
+    #=
+    generic cell structure, all nodes of domain contain one (and only one) of these
+    id: cell id in abm
+    pos: position of cell in grid as integer tuple, also used for flow direction calculations
+    w_level: water level
+    s_elev: surface elevation
+    visited: boolean tuple indicating visitation by
+        index 1: water parcel
+        index 2: sediment, sand parcel
+        index 3: sediment, mud parcel
+    is_sea_boundary: used to check if height should be held at sea level
+    is_wall_boundary: used to check if passable to parcels
+    is_inlet_boundary: used to define inlet for water parcels and sediment parcels
+    =#
+    id::Int64
+    pos::Tuple{Int64, Int64}
+    w_level::Float64
+    s_elev::Float64
+    # visited::Tuple{Bool, Bool, Bool}
+    is_sea_boundary::Bool
+    is_wall_boundary::Bool
+    is_inlet_boundary::Bool
+end
+
+# mutable struct water_parcel
 #     id::Int64
 #     pos::Tuple{Int64, Int64}
-#     H_old::Float64
-#     H_smooth::Float64
-#     H_new::Float64
-#     η::Float64
-#     q_w::MVector{2,Float64}
-#     sediments::MVector{2,Float64}
-#     visited::Tuple{Bool, Bool, Bool}
-#     is
+#     volume::Float64
+# end
+#
+# #=
+# type:
+#     fine: sand, noncohesive, carried as bedload
+#     coarse: mud, cohesive, carried as suspended load
+# =#
+# mutable struct fine_sed_parcel
+#     id::Int64
+#     pos::Tuple{Int64, Int64}
+#     volume::Float64
+# end
+#
+# mutable struct coarse_sed_parcel
+#     id::Int64
+#     pos::Tuple{Int64, Int64}
+#     volume::Float64
 # end
