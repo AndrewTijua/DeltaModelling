@@ -132,22 +132,19 @@ function J_ij_out_help(J_ik_in::Float64, I_out::Float64, I_ij_out::Float64)
     end
 end
 
+function setup_wf!(model)
+    for node_c in nodes(model)
+        node = model[get_node_contents(node_c, model)[1]]
+        node.w_flow = 0.0
+    end
+end
 
-function flow_step!(model)
+function flow_sediment_balance!(model)
     I_ij::Float64 = 0.0
     sigma_ij::Float64 = 0.0
     J_ij_out::Float64 = 0.0
     dS_ij::Float64 = 0.0
     out_water::Float64 = 0.0
-    h_neigh::Float64 = 0.0
-    num_neigh::UInt8 = 0
-
-
-    for node_c in nodes(model)
-        node = model[get_node_contents(node_c, model)[1]]
-        node.w_flow = 0.0
-    end
-
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
 
@@ -204,7 +201,9 @@ function flow_step!(model)
             #setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
         end
     end
+end
 
+function propagate_sediment!(model)
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
         #change water level for non inlet nodes
@@ -214,7 +213,11 @@ function flow_step!(model)
             node.w_level = (node.w_level - node.w_flow * model.dt)
         end
     end
+end
 
+function finalise_smooth!(model)
+    h_neigh::Float64 = 0.0
+    num_neigh::UInt8 = 0
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
         if node.w_level > node.s_elev
@@ -228,4 +231,11 @@ function flow_step!(model)
             node.s_elev = (1 - model.ϵ) * node.s_elev + model.ϵ / num_neigh * h_neigh
         end
     end
+end
+
+function flow_step!(model)
+    setup_wf!(model)
+    @fastmath flow_sediment_balance!(model)
+    @fastmath propagate_sediment!(model)
+    @fastmath finalise_smooth!(model)
 end

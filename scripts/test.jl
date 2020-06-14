@@ -49,11 +49,11 @@ wf = reshape(f, size(w_mat))
 plot(xs, ys, wl, st = :surface, c = :blues)
 plot!(xs, ys, se, st = :surface, c = :greens)
 
-plot(xs, ys, wl - se .+ δ, st = :surface)
+# plot(xs, ys, wl - se .+ δ, st = :surface)
 
-plot(xs, ys, wf, st = :surface)
+# plot(xs, ys, wf, st = :surface)
 
-using ProfileView
+# using ProfileView
 # @profview run!(d_model, dummystep, flow_step!, nsteps; adata = adata, when = [nsteps])
-@profview run!(d_model, dummystep, flow_step!, 100; adata = adata, when = [100])
-@time flow_step!(d_model)
+# @profview run!(d_model, dummystep, flow_step!, 100; adata = adata, when = [100])
+# @time flow_step!(d_model)
