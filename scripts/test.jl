@@ -27,13 +27,14 @@ plot!(xs, ys, h_mat, st = :surface)
 
 sbx = sby = 65
 
-d_model = delta_model_abm(h_mat, w_mat, sbx, sby; timestep = 0.5, moore = false, c1 = 0.0)
+d_model = delta_model_abm(h_mat, w_mat, sbx, sby; timestep = 0.5, moore = false)
 
 w_lev(a) = a.w_level
 s_elev(a) = a.s_elev
 w_flow(a) = a.w_flow
+in_sed(a) = a.in_sed
 
-adata = [w_lev, s_elev, w_flow]
+adata = [w_lev, s_elev, w_flow, in_sed]
 
 flow_step!(d_model)
 
@@ -43,11 +44,15 @@ results, _ = run!(d_model, dummystep, flow_step!, nsteps; adata = adata, when = 
 k = Array(results.w_lev)
 m = Array(results.s_elev)
 f = Array(results.w_flow)
+s = Array(results.in_sed)
 wl = reshape(k, size(w_mat))
 se = reshape(m, size(w_mat))
 wf = reshape(f, size(w_mat))
+si = reshape(s, size(w_mat))
 plot(xs, ys, wl, st = :surface, c = :blues)
 plot!(xs, ys, se, st = :surface, c = :greens)
+
+plot(xs, ys, si, st = :surface, c = :cividis)
 
 # plot(xs, ys, wl - se .+ δ, st = :surface)
 

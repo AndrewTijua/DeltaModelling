@@ -9,10 +9,8 @@ mutable struct cell <: AbstractAgent
     pos: position of cell in grid as integer tuple, also used for flow direction calculations
     w_level: water level
     s_elev: surface elevation
-    visited: boolean tuple indicating visitation by
-        index 1: water parcel
-        index 2: sediment, sand parcel
-        index 3: sediment, mud parcel
+    in_sed: sediment carried at start of step
+    in_sed_new: sediment carried at end of step
     is_sea_boundary: used to check if height should be held at sea level
     is_inlet_boundary: used to define inlet for water parcels and sediment parcels
     =#
@@ -95,7 +93,7 @@ function delta_model_abm(
             elseif ((x < grid_dims[1] && y < grid_dims[2]) || (x == grid_dims[1] && y < sby) || (y == grid_dims[2] && x < sbx))
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, false, false), model)
             else
-                add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, false, true), model)
+                add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, true, false), model)
             end
             _idx += 1
         end
@@ -123,9 +121,7 @@ function sed_ero_rate(c1::Float64, c2::Float64, I_ero::Float64, V_ero::Float64, 
 end
 
 function J_ij_out_help(J_ik_in::Float64, I_out::Float64, I_ij_out::Float64)
-    if I_ij_out <= 0
-        return 0.0
-    elseif I_out <= 0
+    if I_out == 0.0
         return 0.0
     else
         return (J_ik_in * I_ij_out / I_out)
@@ -164,13 +160,13 @@ function flow_sediment_balance!(model)
 
         #calculate sum(abs(I_ik^out))
         out_water = 0.0
+        in_sediment = node.in_sed
         for neighbor_c in node_neighbors(node_c, model)
             neighbor = model[get_node_contents(neighbor_c, model)[1]]
             I_ij = (node.w_level - neighbor.w_level) * h_conduct(node.w_level, neighbor.w_level, node.s_elev, neighbor.s_elev, model.c_sigma)
-            if I_ij > 0
-                out_water += I_ij
+            out_water += abs(I_ij)
         end
-        end
+
 
         #calculate erosive flow and distribute
         for neighbor_c in node_neighbors(node_c, model)
@@ -189,11 +185,11 @@ function flow_sediment_balance!(model)
             #nH_i = node.s_elev + 0.5 * model.dt * dS_ij
             #nH_j = neighbor.s_elev + 0.5 * model.dt * dS_ij
 
-            J_ij_out = J_ij_out_help(node.in_sed, out_water, I_ij)
+            #J_ij_out = J_ij_out_help(in_sediment, out_water, I_ij)
             # node.in_sed -= J_ij_out
             # neighbor.in_sed_new += J_ij_out
-            setfield!(node, :in_sed, node.in_sed - J_ij_out)
-            setfield!(neighbor, :in_sed_new, neighbor.in_sed + J_ij_out)
+            setfield!(node, :in_sed_new, in_sediment - dS_ij)
+            setfield!(neighbor, :in_sed_new, neighbor.in_sed + dS_ij)
 
             # node.s_elev = nH_i
             # neighbor.s_elev = nH_j
@@ -207,7 +203,8 @@ function propagate_sediment!(model)
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
         #change water level for non inlet nodes
-        node.in_sed = node.in_sed_new
+        insed = node.in_sed_new
+        node.in_sed = insed
         node.in_sed_new = 0.0
         if !((node.is_inlet) || (node.is_sea_boundary))
             node.w_level = (node.w_level - node.w_flow * model.dt)
@@ -235,7 +232,7 @@ end
 
 function flow_step!(model)
     setup_wf!(model)
-    @fastmath flow_sediment_balance!(model)
-    @fastmath propagate_sediment!(model)
-    @fastmath finalise_smooth!(model)
+    flow_sediment_balance!(model)
+    propagate_sediment!(model)
+    finalise_smooth!(model)
 end
