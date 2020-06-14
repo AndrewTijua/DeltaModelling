@@ -2,6 +2,8 @@ using StaticArrays
 using LinearAlgebra
 using Agents
 
+#there is no god
+
 mutable struct cell <: AbstractAgent
     #=
     generic cell structure, all nodes of domain contain one (and only one) of these

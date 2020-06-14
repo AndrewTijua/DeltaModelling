@@ -21,7 +21,7 @@ for col = y, row = x
 end
 h_mat ./= 1000.
 
-
+#i hate this
 # h_mat = convert(Array{Float64, 2}, sqrt.(x) * sqrt.(y)')
 # h_mat ./= 16 * maximum(h_mat)
 # h_mat .*= -1.
