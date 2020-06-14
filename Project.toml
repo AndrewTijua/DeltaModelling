@@ -1,6 +1,11 @@
 name = "deltamodelling"
 authors = ["Benjamin Cox"]
-[compat]
-julia = "1.4.2"
+
 [deps]
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"
+Traceur = "37b6cedf-1f77-55f8-9503-c64b63398394"
+
+[compat]
+julia = "1.4.2"

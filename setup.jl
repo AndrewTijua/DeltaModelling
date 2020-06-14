@@ -1,7 +1,7 @@
 using DrWatson
 using Agents
 using Plots
-gr()
+plotlyjs()
 using AgentsPlots
 using LinearAlgebra
 using StaticArrays

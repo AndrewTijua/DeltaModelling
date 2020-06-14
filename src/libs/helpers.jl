@@ -57,7 +57,7 @@ function delta_model_abm(
     sbx,
     sby;
     timestep = 0.1,
-    eps_smooth = 1e-7,
+    eps_smooth = 1e-4,
     I_0 = 1.7e-4,
     J_0 = 2.5e-4,
     c_sigma = 8.5,
@@ -103,20 +103,18 @@ function delta_model_abm(
     return model
 end
 
-function h_conduct(Vi, Vj, Hi, Hj, c_sigma)
-    V_avg = 0.5 * (Vi + Vj)
-    H_avg = 0.5 * (Hi + Hj)
-    if (V_avg - H_avg) > 0.0
-        return c_sigma * (V_avg - H_avg)
+function h_conduct(Vi::Float64, Vj::Float64, Hi::Float64, Hj::Float64, c_sigma::Float64)
+    #V_avg = 0.5 * (Vi + Vj)
+    #H_avg = 0.5 * (Hi + Hj)
+    if ((Vi + Vj) - (Hi + Hj)) > 0.0
+        return c_sigma * 0.5 * (Vi + Vj - Hi - Hj)
     else
         return 0.0
     end
 end
 
-function sed_ero_rate(c1, c2, I_ero, V_ero, I_ij, Vi, Vj, ero_max)
-    t1 = c1 * (I_ero - abs(I_ij))
-    t2 = c2 * (V_ero - abs(Vi - Vj))
-    dsij = t1 + t2
+function sed_ero_rate(c1::Float64, c2::Float64, I_ero::Float64, V_ero::Float64, I_ij::Float64, Vi::Float64, Vj::Float64, ero_max::Float64)
+    dsij = c1 * (I_ero - abs(I_ij)) + c2 * (V_ero - abs(Vi - Vj))
     if dsij > ero_max
         return dsij
     else
@@ -124,7 +122,7 @@ function sed_ero_rate(c1, c2, I_ero, V_ero, I_ij, Vi, Vj, ero_max)
     end
 end
 
-function J_ij_out_help(J_ik_in, I_out, I_ij_out)
+function J_ij_out_help(J_ik_in::Float64, I_out::Float64, I_ij_out::Float64)
     if I_ij_out <= 0
         return 0.0
     elseif I_out <= 0
@@ -134,7 +132,17 @@ function J_ij_out_help(J_ik_in, I_out, I_ij_out)
     end
 end
 
+
 function flow_step!(model)
+    I_ij::Float64 = 0.0
+    sigma_ij::Float64 = 0.0
+    J_ij_out::Float64 = 0.0
+    dS_ij::Float64 = 0.0
+    out_water::Float64 = 0.0
+    h_neigh::Float64 = 0.0
+    num_neigh::UInt8 = 0
+
+
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
         node.w_flow = 0.0
@@ -164,7 +172,7 @@ function flow_step!(model)
             I_ij = (node.w_level - neighbor.w_level) * h_conduct(node.w_level, neighbor.w_level, node.s_elev, neighbor.s_elev, model.c_sigma)
             if I_ij > 0
                 out_water += I_ij
-            end
+        end
         end
 
         #calculate erosive flow and distribute
@@ -174,19 +182,26 @@ function flow_step!(model)
             sigma_ij = h_conduct(node.w_level, neighbor.w_level, node.s_elev, neighbor.s_elev, model.c_sigma)
             I_ij = sigma_ij * (node.w_level - neighbor.w_level)
 
-            node.w_flow = node.w_flow + I_ij
+            #node.w_flow = node.w_flow + I_ij
+            setfield!(node, :w_flow, node.w_flow + I_ij)
             #neighbor.w_flow = neighbor.w_flow - I_ij
 
             dS_ij = sed_ero_rate(model.c1, model.c2, model.I_ero, model.V_ero, I_ij, node.w_level, neighbor.w_level, model.ero_max)
-            nH_i = node.s_elev + 0.5 * model.dt * dS_ij
-            nH_j = neighbor.s_elev + 0.5 * model.dt * dS_ij
+            setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
+            setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
+            #nH_i = node.s_elev + 0.5 * model.dt * dS_ij
+            #nH_j = neighbor.s_elev + 0.5 * model.dt * dS_ij
 
             J_ij_out = J_ij_out_help(node.in_sed, out_water, I_ij)
-            node.in_sed -= J_ij_out
-            neighbor.in_sed_new += J_ij_out
+            # node.in_sed -= J_ij_out
+            # neighbor.in_sed_new += J_ij_out
+            setfield!(node, :in_sed, node.in_sed - J_ij_out)
+            setfield!(neighbor, :in_sed_new, neighbor.in_sed + J_ij_out)
 
-            node.s_elev = nH_i
-            neighbor.s_elev = nH_j
+            # node.s_elev = nH_i
+            # neighbor.s_elev = nH_j
+            #setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
+            #setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
         end
     end
 
