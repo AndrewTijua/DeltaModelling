@@ -90,7 +90,7 @@ function delta_model_abm(
         for y = 1:grid_dims[2]
             if (x == 1 && y == 1)
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], I_0, J_0, 0.0, false, true), model)
-            elseif ((x < grid_dims[1] && y < grid_dims[2]) || (x == grid_dims[1] && y < sby) || (y == grid_dims[2] && x < sbx))
+            elseif ((x < grid_dims[1] && y < grid_dims[2]) || (x == grid_dims[1] && y <= sby) || (y == grid_dims[2] && x <= sbx))
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, false, false), model)
             else
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, true, false), model)
@@ -102,10 +102,10 @@ function delta_model_abm(
 end
 
 function h_conduct(Vi::Float64, Vj::Float64, Hi::Float64, Hj::Float64, c_sigma::Float64)
-    #V_avg = 0.5 * (Vi + Vj)
-    #H_avg = 0.5 * (Hi + Hj)
-    if ((Vi + Vj) - (Hi + Hj)) > 0.0
-        return c_sigma * 0.5 * (Vi + Vj - Hi - Hj)
+    V_avg = 0.5 * (Vi + Vj)
+    H_avg = 0.5 * (Hi + Hj)
+    if V_avg > H_avg
+        return c_sigma * (V_avg - H_avg)
     else
         return 0.0
     end
@@ -132,6 +132,8 @@ function setup_wf!(model)
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
         node.w_flow = 0.0
+        in_sediment = node.in_sed
+        node.in_sed_new = in_sediment
     end
 end
 
@@ -147,25 +149,27 @@ function flow_sediment_balance!(model)
         #set boundary conditions and skip
         if node.is_sea_boundary
             node.w_level = 0.0
+            node.w_flow = 0.0
             node.in_sed = 0.0
             node.in_sed_new = 0.0
         end
 
         #check if inlet and if so add flow and sediment
         if node.is_inlet
-            node.w_flow = model.I_0
+            node.w_flow = -model.I_0
             node.in_sed = model.s_0
             node.in_sed_new = model.s_0
         end
 
         #calculate sum(abs(I_ik^out))
-        out_water = 0.0
-        in_sediment = node.in_sed
-        for neighbor_c in node_neighbors(node_c, model)
-            neighbor = model[get_node_contents(neighbor_c, model)[1]]
-            I_ij = (node.w_level - neighbor.w_level) * h_conduct(node.w_level, neighbor.w_level, node.s_elev, neighbor.s_elev, model.c_sigma)
-            out_water += abs(I_ij)
-        end
+        # out_water = 0.0
+        # for neighbor_c in node_neighbors(node_c, model)
+        #     neighbor = model[get_node_contents(neighbor_c, model)[1]]
+        #     I_ij = (node.w_level - neighbor.w_level) * h_conduct(node.w_level, neighbor.w_level, node.s_elev, neighbor.s_elev, model.c_sigma)
+        #     if I_ij <= 0
+        #         out_water += abs(I_ij)
+        #     end
+        # end
 
 
         #calculate erosive flow and distribute
@@ -175,9 +179,8 @@ function flow_sediment_balance!(model)
             sigma_ij = h_conduct(node.w_level, neighbor.w_level, node.s_elev, neighbor.s_elev, model.c_sigma)
             I_ij = sigma_ij * (node.w_level - neighbor.w_level)
 
-            #node.w_flow = node.w_flow + I_ij
-            setfield!(node, :w_flow, node.w_flow + I_ij)
-            #neighbor.w_flow = neighbor.w_flow - I_ij
+            node.w_flow = node.w_flow + I_ij
+            # setfield!(node, :w_flow, node.w_flow + I_ij)
 
             dS_ij = sed_ero_rate(model.c1, model.c2, model.I_ero, model.V_ero, I_ij, node.w_level, neighbor.w_level, model.ero_max)
             setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
@@ -188,13 +191,19 @@ function flow_sediment_balance!(model)
             #J_ij_out = J_ij_out_help(in_sediment, out_water, I_ij)
             # node.in_sed -= J_ij_out
             # neighbor.in_sed_new += J_ij_out
-            setfield!(node, :in_sed_new, in_sediment - dS_ij)
+            setfield!(node, :in_sed_new, node.in_sed_new - dS_ij)
             setfield!(neighbor, :in_sed_new, neighbor.in_sed + dS_ij)
 
             # node.s_elev = nH_i
             # neighbor.s_elev = nH_j
-            #setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
-            #setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
+            setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
+            setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
+        end
+
+        if !((node.is_inlet) || (node.is_sea_boundary))
+            if (node.w_level > 0.)
+                node.w_level = node.w_level - node.w_flow * model.dt
+            end
         end
     end
 end
@@ -206,9 +215,7 @@ function propagate_sediment!(model)
         insed = node.in_sed_new
         node.in_sed = insed
         node.in_sed_new = 0.0
-        if !((node.is_inlet) || (node.is_sea_boundary))
-            node.w_level = (node.w_level - node.w_flow * model.dt)
-        end
+
     end
 end
 
@@ -217,16 +224,21 @@ function finalise_smooth!(model)
     num_neigh::UInt8 = 0
     for node_c in nodes(model)
         node = model[get_node_contents(node_c, model)[1]]
+        h_neigh = 0.0
+        w_neigh = 0.0
+        num_neigh = 0
+        for neighbor_c in node_neighbors(node_c, model)
+            neighbor = model[get_node_contents(neighbor_c, model)[1]]
+            num_neigh += 1
+            h_neigh += neighbor.s_elev
+            w_neigh += neighbor.w_level
+        end
         if node.w_level > node.s_elev
-            h_neigh = 0.0
-            num_neigh = 0
-            for neighbor_c in node_neighbors(node_c, model)
-                neighbor = model[get_node_contents(neighbor_c, model)[1]]
-                num_neigh += 1
-                h_neigh += neighbor.s_elev
-            end
             node.s_elev = (1 - model.ϵ) * node.s_elev + model.ϵ / num_neigh * h_neigh
         end
+        # if !((node.is_inlet) || (node.is_sea_boundary))
+        #     node.w_level = (1 - model.ϵ) * node.w_level + model.ϵ / num_neigh * w_neigh
+        # end
     end
 end
 
