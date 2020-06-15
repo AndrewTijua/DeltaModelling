@@ -77,6 +77,7 @@ function delta_model_abm(
         :I_ero => I_ero,
         :V_ero => V_ero,
         :ero_max => theta_ero,
+        :dep_max => -theta_ero,
         :c1 => c1,
         :c2 => c2,
         :moore => moore,
@@ -92,7 +93,7 @@ function delta_model_abm(
         for y = 1:grid_dims[2]
             if (x == 1 && y == 1)
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], I_0, J_0, 0.0, false, true), model)
-            elseif ((x < grid_dims[1] && y < grid_dims[2]) || (x == grid_dims[1] && y <= sby) || (y == grid_dims[2] && x <= sbx))
+            elseif ((x < grid_dims[1] && y < grid_dims[2]) || (x == grid_dims[1] && y < sby) || (y == grid_dims[2] && x < sbx))
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, false, false), model)
             else
                 add_agent_pos!(cell(_idx, (x, y), depth_matrix[x, y], height_matrix[x, y], 0.0, 0.0, 0.0, true, false), model)
@@ -116,7 +117,7 @@ end
 function sed_ero_rate(c1::Float64, c2::Float64, I_ero::Float64, V_ero::Float64, I_ij::Float64, Vi::Float64, Vj::Float64, ero_max::Float64)
     dsij = c1 * (I_ero - abs(I_ij)) + c2 * (V_ero - abs(Vi - Vj))
     if dsij > ero_max
-        return dsij
+        return max(dsij, -ero_max)
     else
         return ero_max
     end
@@ -158,7 +159,7 @@ function flow_sediment_balance!(model)
 
         #check if inlet and if so add flow and sediment
         if node.is_inlet
-            node.w_flow = -model.I_0
+            node.w_flow = model.I_0
             node.in_sed = model.s_0
             node.in_sed_new = model.s_0
         end
@@ -198,15 +199,10 @@ function flow_sediment_balance!(model)
 
             # node.s_elev = nH_i
             # neighbor.s_elev = nH_j
-            setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
-            setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
+            #setfield!(node, :s_elev, node.s_elev + 0.5 * model.dt * dS_ij)
+            #setfield!(neighbor, :s_elev, neighbor.s_elev + 0.5 * model.dt * dS_ij)
         end
 
-        if !((node.is_inlet) || (node.is_sea_boundary))
-            if (node.w_level > 0.)
-                node.w_level = node.w_level - node.w_flow * model.dt
-            end
-        end
     end
 end
 
@@ -217,7 +213,11 @@ function propagate_sediment!(model)
         insed = node.in_sed_new
         node.in_sed = insed
         node.in_sed_new = 0.0
-
+        if !((node.is_inlet) || (node.is_sea_boundary))
+            if node.s_elev > 0
+                node.w_level = node.w_level - node.w_flow * model.dt
+            end
+        end
     end
 end
 
@@ -236,11 +236,8 @@ function finalise_smooth!(model)
             w_neigh += neighbor.w_level
         end
         if node.w_level > node.s_elev
-            node.s_elev = (1 - model.ϵ) * node.s_elev + model.ϵ / num_neigh * h_neigh
+            node.s_elev = (1. - model.ϵ) * node.s_elev + model.ϵ / num_neigh * h_neigh
         end
-        # if !((node.is_inlet) || (node.is_sea_boundary))
-        #     node.w_level = (1 - model.ϵ) * node.w_level + model.ϵ / num_neigh * w_neigh
-        # end
     end
 end
 
